@@ -1,0 +1,120 @@
+---
+title: "HUD Housing Ratings Project"
+author: "Meg Robertson"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readxl)
+library(lubridate)
+library(usmap) 
+library(sf)
+library(plotly)
+```
+
+`r Sys.Date()`
+
+## Project Overview
+The U.S. Department of Housing and Urban Development's (HUD) Real Estate Assessment Center conducts physical property inspections of properties that are owned, insured, or subsidized by HUD, including public housing and multifamily assisted housing. About 20,000 such inspections are conducted each year to ensure that families have housing that is decent, safe, sanitary, and in good repair. HUD publishes a full historical view of the results of those inspections, providing point-in-time property scores. This project uses housing rating data from 2016-2019. 
+<!-- Housing rating data was downloaded from HUD (https://www.huduser.gov/portal/datasets/pis.html#2020_data) Data from the year 2019 was downloaded and converted to a csv file. The following code saves the data to a dataframe called "rawdata_2019" and examines the data. -->
+```{r import_data, include=FALSE, echo=FALSE}
+rawdata_2019 <- read.csv("/Users/Meg/Desktop/Career/R Portfolio/Housing rating data project/Public Housing Physical Inspection Scores Data/public-housing-physical-inspection-scores-2019.csv", header=TRUE)
+```
+
+## Data Exploration  
+The dataset used for this project includes 6783 observations and 20 variables.
+```{r exploration, include=FALSE, echo=FALSE}
+str(rawdata_2019)
+```
+```{r exploration2, echo=FALSE}
+head(rawdata_2019)
+tail(rawdata_2019)
+```
+Each record in the housing ratings dataset contains information related to a unique housing inspection. Most of the variables in the dataset are information about each property that was insepcted (e.g., location, development name, and Public Housing Authority code). The dataset also contains three variables related to the inspection: inspection ID, inspection score, and inspection date.
+
+Per [66 FR 59083](https://www.govinfo.gov/content/pkg/FR-2001-11-26/pdf/01-29266.pdf), inspection scores are calculated using a 100 point scale. 
+
+```{r, include=FALSE, echo=FALSE}
+mean_inspection_score <- round(mean(rawdata_2019$INSPECTION_SCORE))
+mean_inspection_score
+
+median_inspection_score <- median(rawdata_2019$INSPECTION_SCORE)
+median_inspection_score
+```
+
+Inspection scores are negatively skewed; the average inspection score from 2016-2019 was `r mean_inspection_score` and the median score was `r median_inspection_score`. The distribution of inspection scores is plotted below with a black dashed line representing the mean score.
+
+
+```{r, echo=FALSE}
+ggplot(data=rawdata_2019, aes(x=INSPECTION_SCORE)) + 
+  geom_histogram(col="black", 
+                 fill="purple", 
+                 alpha = .3) + 
+  labs(title="Histogram for 2019 Housing Inspection Scores", x="Inspection Score", y="Count") +
+  geom_vline(xintercept=mean(rawdata_2019$INSPECTION_SCORE), lwd=1, linetype=2, color="black")+
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+```
+<!-- Creating a new date variable- INSPECTION_DATE_MDY- using the lubridate package -->
+```{r, include=FALSE, echo=FALSE}
+rawdata_2019_datefix <- 
+  rawdata_2019 %>% 
+  mutate(INSPECTION_DATE_MDY = mdy(as.character(rawdata_2019$INSPECTION_DATE))) %>% 
+  mutate(INPECTION_MONTH = month.name[month(INSPECTION_DATE_MDY)])
+```
+
+
+
+```{r, echo=FALSE}
+ggplot(data=rawdata_2019_datefix, aes(x=INPECTION_MONTH)) + 
+  geom_bar(col="black", 
+           fill="dark blue") + 
+  scale_x_discrete(name=element_blank(), labels = c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")) +
+  scale_y_continuous(name="Count of Inspections") +
+  labs(title="Distribution of Inspections by Month")+
+  theme(plot.title = element_text(size = 15, hjust = 0.5)) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+
+Texas, Pennsylvania, New York, Illinois, and Georgia had the highest number of inspections. 
+```{r, echo=FALSE}
+rawdata_2019 %>% count(STATE_CODE, sort = TRUE)
+```
+
+
+## Mapping Inspection Score Data by U.S. State 
+
+```{r, calculate state means, include=FALSE, echo=FALSE}
+state_means <- 
+  aggregate(x = rawdata_2019$INSPECTION_SCORE,              
+          by = list(rawdata_2019$STATE_CODE),             
+          FUN = mean)
+state_means
+
+colnames(state_means)
+
+names(state_means)[names(state_means) == "Group.1"] <- "state"
+names(state_means)[names(state_means) == "x"] <- "Mean_Inspection_Score"
+state_means
+
+state_means_ordered <-state_means[order(state_means$Mean_Inspection_Score),]
+state_means_ordered
+```
+
+
+```{r, mapping, echo=FALSE}
+plot_usmap(data = state_means, values = "Mean_Inspection_Score", color = "blue") + 
+  scale_fill_continuous(low = "light blue", high = "dark blue", name = "Inspection Score Mean", label = scales::comma) + 
+  labs(title = "Average HUD Inspection Scores by State", subtitle = "") +
+  theme(legend.position = "right") +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+```
+
+
